@@ -1,0 +1,191 @@
+﻿* 준비 : master 서버 ON
+
+* 1. Hadoop 다운로드 & 설치(압축풀기)  : Master에서 작업
+
+[hadoop@master ~]$ wget https://archive.apache.org/dist/hadoop/common/hadoop-3.3.6/hadoop-3.3.6.tar.gz
+[hadoop@master ~]$ tar xvzf hadoop-3.3.6.tar.gz     
+
+* 2. java 홈 & Hadoop 홈 디렉터리 지정
+
+1) java 홈 디렉토리 확인  
+[hadoop@master ~]$ ls /usr/local
+
+2) 환경설정파일에서 java 홈 & Hadoop 홈 디렉터리 지정 
+[hadoop@master ~]$ vi .bash_profile
+파일 끝 부분에 아래 문장 추가
+
+export JAVA_HOME=/usr/local/jdk1.8.0_461
+export HADOOP_HOME=/home/hadoop/hadoop-3.3.6
+export PATH=$PATH:$JAVA_HOME/bin:$HADOOP_HOME/bin:$HADOOP_HOME/sbin
+
+
+3) .bash_profile의 수정된 내용 반영 및 확인 
+[hadoop@master ~]$ source .bash_profile    
+[hadoop@master ~]$ cd $JAVA_HOME        
+[hadoop@master ~]$ cd $HADOOP_HOME    
+
+
+* 3. Hadoop 환경 설정 
+# hadoop 환경설정 파일이 있는 디렉터리 이동 
+[hadoop@master ~]$ cd $HADOOP_HOME/etc/hadoop   
+
+1) Hadoop 환경 설정 (jdk 추가)
+[hadoop@master hadoop]$ vi hadoop-env.sh   
+파일 끝 부분에 아래 문장 추가 
+
+export JAVA_HOME=/usr/local/jdk1.8.0_461
+
+2) HDFS의 NameNode url 지정
+[hadoop@master hadoop]$ vi core-site.xml   
+파일 끝 부분에 아래 문장 추가 
+
+<configuration>
+    <property>
+        <name>fs.defaultFS</name>
+        <value>hdfs://master:9000</value>
+    </property>
+</configuration>
+
+
+3) MapReduce 관련 설정
+[hadoop@master hadoop]$ vi mapred-site.xml   
+파일 끝 부분에 아래 문장 추가 
+
+<configuration>
+        <property>
+                <name>mapreduce.framework.name</name>
+                <value>yarn</value>
+        </property>
+        <property>	
+                <name>yarn.app.mapreduce.am.env</name>
+                <value>HADOOP_MAPRED_HOME=$HADOOP_HOME</value>
+        </property>
+        <property>
+                <name>mapreduce.map.env</name>
+                <value>HADOOP_MAPRED_HOME=$HADOOP_HOME</value>
+        </property>
+        <property>
+                <name>mapreduce.reduce.env</name>
+                <value>HADOOP_MAPRED_HOME=$HADOOP_HOME</value>
+        </property>
+</configuration>
+
+
+4) Hadoop 홈 디렉토리 아래 namenode와 datanode 디렉토리 생성
+[hadoop@master hadoop]$ mkdir -p ~/hadoopdata/hdfs/namenode 
+[hadoop@master hadoop]$ mkdir -p ~/hadoopdata/hdfs/datanode
+
+
+5) 하둡분산파일시스템(HDFS) 환경 설정 : Multi-Node Cluster 모드용
+[hadoop@master hadoop]$ vi hdfs-site.xml   
+파일 끝 부분에 아래 문장 추가
+
+<configuration>
+        <property>
+                <name>dfs.replication</name>
+                <value>3</value>
+        </property>
+        <property>
+                <name>dfs.namenode.name.dir</name>
+                <value>/home/hadoop/hadoopdata/hdfs/namenode</value>
+                <final>true</final>
+        </property>
+        <property>
+                <name>dfs.datanode.data.dir</name>
+                <value>/home/hadoop/hadoopdata/hdfs/datanode</value>
+                <final>true</final>
+        </property>
+</configuration>
+
+6) YARN 설정(Resource/Node Manager 지정) : Multi-Node Cluster 모드용
+[hadoop@master hadoop]$ vi yarn-site.xml  
+파일 끝 부분에 아래 문장 추가
+  
+<configuration>
+
+<!-- Site specific YARN configuration properties -->
+        <property>
+                <name>yarn.resourcemanager.hostname</name>
+                <value>master</value>
+        </property>
+        <property>
+                <name>yarn.nodemanager.aux-services</name>
+                <value>mapreduce_shuffle</value>
+        </property>
+        <property>
+                <name>yarn.nodemanager.vmem-check-enabled</name>
+                <value>false</value>
+        </property>
+        <property>
+                <name>yarn.resourcemanager.address</name>
+                <value>master:8032</value>
+        </property>
+        <property>
+                <name>yarn.resourcemanager.scheduler.address</name>
+                <value>master:8030</value>
+        </property>
+        <property>
+                <name>yarn.resourcemanager.resource-tracker.address</name>
+                <value>master:8031</value>
+        </property>
+
+</configuration>
+
+7) DataNode 설정 : Multi-Node Cluster 모드용
+[hadoop@master hadoop]$ vi workers 
+파일 끝 부분에 아래 문장 추가
+
+slave1
+
+
+* 4. 하둡 시스템 배포 : 설정 사항을 Slave 서버에 배포(주의 : Slave1 서버 ON)
+
+- hadoop 홈 디렉터리 이동
+[hadoop@master hadoop]$ cd     
+
+-  hadoop을 Slave 서버에 배포
+[hadoop@master ~]$ scp -r /home/hadoop/hadoop-3.3.6 hadoop@slave1:~
+
+- 환경설정(.bash_profile) 파일을 Slave 서버에  배포
+[hadoop@master ~]$ scp /home/hadoop/.bash_profile hadoop@slave1:~
+
+
+* 5. HDFS를 포맷 : 처음 HDFS를 사용할 때는 HDFS를 포맷한다.
+[hadoop@master ~]$ hdfs namenode -format    
+
+
+* 6. Hadoop/Yarn 데몬 시작  
+1) Master 서버 재시작 
+
+2) Hadoop 데몬 시작 : hadoop과 yarn 동시 실행 방법  
+[hadoop@master ~]$ start-all.sh
+
+2) Hadoop 데몬 시작 : hadoop과 yarn 개별 실행 방법  
+[hadoop@master ~]$ start-dfs.sh
+
+[hadoop@master ~]$ start-yarn.sh
+
+* 7. Hadoop 상태 확인 
+- Master 서버 : NameNode 동작여부 확인
+[hadoop@master ~]$ jps   
+3944 ResourceManager       
+3450 NameNode                
+3694 SecondaryNameNode  
+
+- Slave1 서버 : DataNode의 동작여부 확인
+[hadoop@slave1 ~]$ jps
+3196 NodeManager         
+3068 DataNode               
+
+* web 브라우저에서 동작여부 확인
+http://localhost:9870 
+
+* hdfs 현황 보기 
+[hadoop@master ~]$ hdfs dfsadmin -report
+
+* [실습] HDFS에 디렉토리 생성 & 확인 
+[hadoop@master ~]$ hdfs dfs -mkdir /test
+[hadoop@master ~]$ hdfs dfs -ls  /test
+
+* 8. Hadoop과 Yarn 데몬 종료
+[hadoop@master ~]$ stop-all.sh

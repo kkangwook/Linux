@@ -1,0 +1,121 @@
+﻿* Hive 설치 : master 서버 작업
+* 준비 : 모든 서버 ON &  하둡/얀 데몬 실행
+
+** 2. Spark 설치
+
+* 1) Spark 다운로드  
+#  hadoop 홈 디렉토리 이동 
+[hadoop@master ~]$ wget https://archive.apache.org/dist/spark/spark-3.4.4/spark-3.4.4-bin-hadoop3.tgz
+
+* 2) Spark 압축파일 풀기 & 소프트 링크 
+[hadoop@master ~]$ pwd
+/home/hadoop 
+[hadoop@master ~]$ tar -xvzf spark-3.4.4-bin-hadoop3.tgz  # 압축풀기
+
+[hadoop@master ~]$ ln -s spark-3.4.4-bin-hadoop3 spark    # 소프트 링크
+
+
+** 3. Spark 환경설정
+[hadoop@master ~]$ vi .bash_profile
+파일 끝 부분에 아래 명령문 추가 
+
+export SPARK_HOME=/home/hadoop/spark
+export PATH=$PATH:$SPARK_HOME/bin
+
+# 환경변수 반영 및 테스트 
+[hadoop@master ~]$ source .bash_profile
+[hadoop@master ~]$ cd $SPARK_HOME
+
+
+** 4. spark 환경설정  
+spark]$ cd conf/  # 환경설정 파일이 있는 디렉터리 이동 
+conf]$ cp spark-env.sh.template spark-env.sh  # 파일 복사 
+
+conf]$ vi spark-env.sh  # 파일 열기 
+파일 끝부분에 다음 명령문 추가 
+
+export HADOOP_HOME=/home/hadoop/hadoop-3.3.6
+export HADOOP_CONF_DIR=$HADOOP_HOME/etc/hadoop
+export HADOOP_COMMON_LIB_NATIVE_DIR=$HADOOP_HOME/lib/native
+
+
+** 5. Spark 실행 : 버전 확인 
+conf]$  cd $SPARK_HOME   # spark 홈 디렉터리 이동 
+[hadoop@master spark]$ spark-submit --version    # spark 버전 확인 
+
+* Spark 테스트 : 원주율 근사치 구하기 
+[hadoop@master spark]$ spark-submit --class org.apache.spark.examples.SparkPi $SPARK_HOME/examples/jars/spark-examples_2.12-3.4.4.jar 10
+
+
+** 6. Spark SQL CLI 실행
+[hadoop@master spark]$ cd conf/   # 환경설정 파일이 있는 디렉터리 이동 
+[hadoop@master spark]$ pwd    # 디렉터리 경로 확인 
+[hadoop@master conf]$ cp $HIVE_HOME/conf/hive-site.xml .    # hive 환경설정 파일 복사 
+[hadoop@master conf]$ cp $HADOOP_HOME/etc/hadoop/core-site.xml .   # hadoop 환경설정 파일 복사 
+[hadoop@master conf]$ cp $HADOOP_HOME/etc/hadoop/hdfs-site.xml .   # hadoop 환경설정 파일 복사 
+[hadoop@master conf]$
+[hadoop@master conf]$ cd $SPARK_HOME  # Spark 홈 디렉터리 이동
+[hadoop@master spark]$ spark-sql   # SPARK sql 실행 
+
+* iris 테이블 생성 
+spark-sql> create table iris_tab(
+         col1 float, col2 float, col3 float, col4 float, col5 string)
+         row format delimited fields terminated by ',' stored as textfile;
+
+spark-sql> show tables;
+iris_tab
+stocks
+test_tab
+
+* iris 데이터셋 다운로드 : 다른 터미널 작업  
+wget https://archive.ics.uci.edu/ml/machine-learning-databases/iris/iris.data
+
+* iris 데이터셋 레코드 삽입 
+spark-sql> load data local inpath '/home/hadoop/iris.data' into table iris_tab;
+
+
+
+* 테이블 내용 보기 
+spark-sql> select * from iris_tab;
+spark-sql> select * from iris_tab where col1 >= 6.5;
+spark-sql> select col5, avg(col1), avg(col3)  from iris_tab  group by col5;
+
+
+
+########################
+### LinearRegression model
+########################
+[hadoop@master spark]$ spark-shell   # spark shell 실행 
+
+// DataFrame, ml package, regression model
+scala> import org.apache.spark.ml.regression.LinearRegression
+
+scala> val sparkHome = sys.env("SPARK_HOME") // Spark 홈 디렉터리 설정(환경변수 이용)
+
+// Load training data
+val training = spark.read.format("libsvm").load("file://"+sparkHome + "/data/mllib/sample_linear_regression_data.txt")
+
+// 선형회귀모델 생성
+val lr = new LinearRegression().setMaxIter(10).setRegParam(0.3).setElasticNetParam(0.8)
+
+// Fit the model
+val lrModel = lr.fit(training)
+
+// Print the coefficients and intercept for linear regression ? 기울기와 절편 
+println(s"Coefficients: ${lrModel.coefficients} Intercept: ${lrModel.intercept}")
+
+// Summarize the model over the training set and print out some metrics
+val trainingSummary = lrModel.summary
+
+println(s"numIterations: ${trainingSummary.totalIterations}")
+// numIterations: 7
+
+println(s"objectiveHistory: [${trainingSummary.objectiveHistory.mkString(",")}]")
+
+// model 평가
+trainingSummary.residuals.show() // 잔차
+println(s"RMSE: ${trainingSummary.rootMeanSquaredError}")
+println(s"r2: ${trainingSummary.r2}")
+
+
+

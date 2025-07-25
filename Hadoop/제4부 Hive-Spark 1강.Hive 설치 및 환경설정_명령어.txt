@@ -1,0 +1,125 @@
+﻿* Hive 설치 : master 서버 작업 
+* 준비 : master/slave1 서버 ON
+
+** 2. Hive 설치 
+
+* 1) Hive 다운로그 & 압축풀기 
+[hadoop@master ~]$ wget https://apache.root.lu/hive/hive-3.1.3/apache-hive-3.1.3-bin.tar.gz
+
+* 압축풀기 : hive 설치 
+[hadoop@master ~]$ tar xvfz apache-hive-3.1.3-bin.tar.gz
+
+* 2) hive 소프트링크 적용  
+[hadoop@master ~]$ ln -s apache-hive-3.1.3-bin  hive 
+[hadoop@master ~]$ ls -l
+
+* 3) Hive 홈 PATH 설정  
+
+* hive 디렉터리 이동 및 확인
+[hadoop@master ~]$ cd hive
+[hadoop@master hive]$ pwd
+[hadoop@master hive]$ ls    
+
+* .bash_profile 설정 : hive home 환경변수/path 추가
+[hadoop@master hive]$ cd   -> 홈 디렉터리 이동 
+[hadoop@master ~]$ vi .bash_profile   -> 설정파일 열기 
+파일 끝 부분에 아래 명령문 추가 
+
+export HIVE_HOME=/home/hadoop/hive
+export PATH=$PATH:$HIVE_HOME/bin
+
+* .bash_profile 적용/테스트
+[hadoop@master ~]$ source .bash_profile     
+[hadoop@master]$ cd $HIVE_HOME   -> 환경변수 테스트 
+[hadoop@master hive]$ pwd   -> 작업 위치 확인 
+
+
+** 3. Hive 환경설정 
+* 1) hive-env.sh 환경설정 : hive 실행 환경 
+[hadoop@master hive]$ cd conf     -> hive 설정파일 디렉터리 이동 
+[hadoop@master conf]$ pwd         -> 작업 위치 확인
+
+[hadoop@master conf]$ cp hive-env.sh.template hive-env.sh    -> 파일 복사
+[hadoop@master conf]$ vi hive-env.sh   
+파일 맨 끝 부분에 아래 코드 추가    
+
+export HIVE_CONF_DIR=/home/hadoop/hive/conf
+export HIVE_AUX_JARS_PATH=/home/hadoop/hive/lib
+
+
+* 2) hive-site.xml 환경설정 : metastore 저장 경로 
+[hadoop@master conf]$ cp hive-default.xml.template hive-site.xml
+[hadoop@master conf]$ vi hive-site.xml
+'/metastore' 문자열 검색 -> metastore 저장 경로(/user/hive/warehouse) 확인 
+
+* 파일 맨 끝 부분의 </configuration> 안쪽에 <property> 태그 2개 추가 
+ 
+<property>
+  <name>system:java.io.tmpdir</name> 
+  <value>/tmp/hive/java</value> 
+</property> 
+<property> 
+  <name>system:user.name</name> 
+  <value>${user.name}</value> 
+</property>
+
+* 3) HDFS와 hive의 상호작용을 위한 환경 설정
+vi $HIVE_HOME/bin/hive-config.sh
+파일 맨 끝 부분에 Hadoop 홈 디렉토리 추가 
+
+export HADOOP_HOME=/home/hadoop/hadoop-3.3.6
+
+* 4) javax.jdo 수정 
+vi $HIVE_HOME/conf/hive-site.xml
+Hive나 다른 어플리케이션이 초기 설정 단계에서 DB가 존재하지 않을 경우 새로운 DB 생성
+
+- vi에서 아래 찾기 기능으로 <name> 태그 찾기 
+/javax.jdo.option.ConnectionURL 
+
+- <value> 태그 내용 수정 전  
+<value>jdbc:derby:;databaseName=metastore_db;create=true</value>
+
+- <value> 태그 내용 수정 후
+<value>jdbc:derby:/home/hadoop/apache-hive-3.1.3-bin/metastore_db;databaseName=metastore_db;create=true</value>
+
+* 5) derby database 시작 
+$HIVE_HOME/bin/schematool -initSchema -dbType derby
+
+오류발생 : 에러문 중간에 보면 row와 대상 파일이 적혀져 있다. hive-site.xml에 이상한 문자가 있다는 뜻 
+:3215 으로 3215행 이동 후 특수문자(&#8;)가 있는 부분 삭제하기  
+
+
+* 6) derby database 재시작 
+$HIVE_HOME/bin/schematool -initSchema -dbType derby
+
+위 명령어를 실행하면 hive 홈 디렉토리에 metastore_db가 생성된다. 
+
+
+** 4. Hadoop DFS 작업 : hive는 HDFS와 YARN 사용 
+# 준비 : master/slave 서버 ON
+[hadoop@master conf]$ start-all.sh   -> 하둡/얀 시작
+
+* DFS 작업 : 디렉토리/접근권한 생성 
+[hadoop@master conf]$ hdfs dfs -ls /   -> 디렉토리 조회 
+[hadoop@master conf]$ hdfs dfs -rm -R /tmp   -> 있는 경우 삭제 
+
+[hadoop@master conf]$ hdfs dfs -mkdir /tmp   -> 임시디렉터리 생성
+[hadoop@master conf]$ hdfs dfs -mkdir -p /user/hive/warehouse   ->  hive table 저장 디렉터리 생성 
+[hadoop@master conf]$ 
+[hadoop@master conf]$ hdfs dfs -chmod g+w /tmp   -> 접근권한 변경 
+[hadoop@master conf]$ hdfs dfs -chmod g+w /user/hive/warehouse   ->접근권한 변경 
+
+
+** 5. hive 실행 & 테이블 만들기 
+[hadoop@master ~]$ hive
+
+hive> show tables;
+
+hive> create table test_tab(sno int, sname string);
+
+hive> show tables;
+
+hive>quit;    # hive 종료
+
+* HDFS에서 테이블 확인
+[hadoop@master ~]$ hdfs dfs -ls /user/hive/warehouse
