@@ -32,7 +32,7 @@ d	40	41	42
 
 12-437. fname=woohyun, score=90 변수만들고, 변수 각각 보고, 목록으로보고 제거하기
 
-13-451주요환경변수들, 환경변수위치보기 -> 환경변수등록 코드는?(그냥 변수/스크립트) -> 영구저장 위해서는?
+13-451주요환경변수들, 환경변수위치보기, 내 홈에서 환경변수 등록하는 파일 이름-> 환경변수등록 코드는?(그냥 변수/스크립트) -> 영구저장 위해서는?
 										export fname=woohyun, export PATH="$PATH:$HOME/myscripts"   -> vi ~/.bashrc에 export붙여넣기 -> source ~/.bashrc 
 
 14-507. rrm이라는 rm -r 기능을 가진 alias만들고 alias목록보고 지우기
